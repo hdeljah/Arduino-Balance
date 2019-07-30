@@ -2,16 +2,13 @@
 #include "I2Cdev.h"
 #include "MPU6050.h"
 #include "math.h"
-#include <NewPing.h>
 
+#define frontMotorPWMPin  9
+#define frontMotorDirPin  8
 #define leftMotorPWMPin   6
 #define leftMotorDirPin   7
 #define rightMotorPWMPin  5
 #define rightMotorDirPin  4
-
-#define TRIGGER_PIN 9
-#define ECHO_PIN 8
-#define MAX_DISTANCE 75
 
 #define Kp  40
 #define Kd  0.05
@@ -20,15 +17,13 @@
 #define targetAngle -2.5
 
 MPU6050 mpu;
-NewPing sonar(TRIGGER_PIN, ECHO_PIN, MAX_DISTANCE);
 
 int16_t accY, accZ, gyroX;
 volatile int motorPower, gyroRate;
 volatile float accAngle, gyroAngle, currentAngle, prevAngle=0, error, prevError=0, errorSum=0;
 volatile byte count=0;
-int distanceCm;
 
-void setMotors(int leftMotorSpeed, int rightMotorSpeed) {
+void setMotors(int leftMotorSpeed, int rightMotorSpeed, int frontMotorSpeed) {
   if(leftMotorSpeed >= 0) {
     analogWrite(leftMotorPWMPin, leftMotorSpeed);
     digitalWrite(leftMotorDirPin, LOW);
@@ -44,6 +39,14 @@ void setMotors(int leftMotorSpeed, int rightMotorSpeed) {
   else {
     analogWrite(rightMotorPWMPin, 255 + rightMotorSpeed);
     digitalWrite(rightMotorDirPin, HIGH);
+  }
+  if(frontMotorSpeed >= 0) {
+    analogWrite(frontMotorPWMPin, frontMotorSpeed);
+    digitalWrite(frontMotorDirPin, LOW);
+  }
+  else {
+    analogWrite(frontMotorPWMPin, 255 + frontMotorSpeed);
+    digitalWrite(frontMotorDirPin, HIGH);
   }
 }
 
@@ -69,8 +72,9 @@ void setup() {
   pinMode(leftMotorDirPin, OUTPUT);
   pinMode(rightMotorPWMPin, OUTPUT);
   pinMode(rightMotorDirPin, OUTPUT);
-  // set the status LED to output mode 
-  pinMode(13, OUTPUT);
+  pinMode(frontMotorPWMPin, OUTPUT);
+  pinMode(frontMotorDirPin, OUTPUT);
+  
   // initialize the MPU6050 and set offset values
   mpu.initialize();
   mpu.setYAccelOffset(1593);
@@ -87,14 +91,7 @@ void loop() {
   gyroX = mpu.getRotationX();
   // set motor power after constraining it
   motorPower = constrain(motorPower, -255, 255);
-  setMotors(motorPower, motorPower);
-  // measure distance every 100 milliseconds
-  if((count%20) == 0){
-    distanceCm = sonar.ping_cm();
-  }
-  if((distanceCm < 20) && (distanceCm != 0)) {
-    setMotors(-motorPower, motorPower);
-  }
+  setMotors(motorPower, motorPower, motorPower);
 }
 // The ISR will be called every 5 milliseconds
 ISR(TIMER1_COMPA_vect)
@@ -111,10 +108,5 @@ ISR(TIMER1_COMPA_vect)
   //calculate output from P, I and D values
   motorPower = Kp*(error) + Ki*(errorSum)*sampleTime - Kd*(currentAngle-prevAngle)/sampleTime;
   prevAngle = currentAngle;
-  // toggle the led on pin13 every second
-  count++;
-  if(count == 200)  {
-    count = 0;
-    digitalWrite(13, !digitalRead(13));
-  }
+  
 }
